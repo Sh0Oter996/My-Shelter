@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Shelter</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<h1>🏚️ Shelter</h1>
+<p>Выживите. Убедите остальных, что вы полезны.</p>
+
+<!-- ===== НАСТРОЙКА ===== -->
+<div class="card" id="setup">
+  <h3>Настройка</h3>
+  <label>Количество игроков (4–8):
+    <input type="number" id="playerCount" value="4" min="4" max="8">
+  </label>
+  <div id="nameInputs" style="margin-top: 12px;"></div>
+
+  <div style="margin-top: 16px;">
+    <label>Сколько игроков должно выжить:
+      <input type="number" id="survivorsCount" value="2" min="1" max="7" style="width:70px;">
+    </label>
+  </div>
+
+  <div style="margin-top: 16px;">
+    <h4 style="margin: 0 0 8px; color:#f0a500;">Раунды голосования</h4>
+    <p class="hint" style="margin-top:0;">Рассчитаны автоматически. Можно изменить вручную: через запятую, например <b>2, 4, 6</b>.</p>
+    <input type="text" id="voteRoundsInput" value="" style="width: 200px;" placeholder="2, 4, 6">
+    <button id="recalcBtn" style="padding: 6px 14px; font-size: 14px;">↻ Пересчитать</button>
+  </div>
+
+  <br>
+  <button id="startBtn">Начать игру</button>
+</div>
+
+<!-- ===== ИГРА ===== -->
+<div id="gameArea" style="display:none;">
+
+  <div class="card pass-screen" id="passScreen" style="display:none;">
+    <h2 id="passTitle">Передайте устройство</h2>
+    <div class="big-name" id="passPlayerName"></div>
+    <p class="warning">Убедитесь, что остальные не видят экран!</p>
+    <button id="passBtn">Я — этот игрок, продолжить</button>
+  </div>
+
+  <div class="card" id="revealPanel" style="display:none;">
+    <h3>Ход игрока: <span id="currentPlayerName" class="player-tag"></span></h3>
+    <p class="hint">Профессия уже раскрыта всем. Нажмите на одну из оставшихся характеристик, чтобы раскрыть её.</p>
+    <div id="currentTraits"></div>
+    <p id="revealStatus"></p>
+  </div>
+
+  <div class="card" id="voteCardPanel" style="display:none;">
+    <h3>Голосование — Раунд <span id="voteRound"></span></h3>
+    <p class="hint">Ваш голос анонимен. Выберите, кого изгнать из убежища. Голос нельзя изменить.</p>
+    <p>Голосует: <span id="voteVoterName" class="player-tag"></span></p>
+    <div id="voteButtons"></div>
+    <div class="vote-progress">
+      Проголосовало: <b id="voteCount">0</b> из <b id="voteTotal">0</b>
+    </div>
+    <p class="vote-private-note" id="voteNote"></p>
+  </div>
+
+  <div class="card decider-panel" id="deciderPanel" style="display:none;">
+    <h3>🗳️ Решающий голос выбывших</h3>
+    <p class="hint">Голоса разделились. Все выбывшие игроки совещаются и отдают <b>один общий решающий голос</b>.</p>
+    <div id="deciderVoters"></div>
+    <p style="margin-top: 12px;">Кандидаты (лидеры голосования):</p>
+    <div id="deciderButtons"></div>
+    <p class="vote-private-note">Решающий голос нельзя изменить.</p>
+  </div>
+
+  <div class="card" id="voteResultPanel" style="display:none;">
+    <h3>Результаты голосования — Раунд <span id="voteResultRound"></span></h3>
+    <div id="voteResults"></div>
+    <button id="voteResultBtn">Продолжить</button>
+  </div>
+
+  <div class="end-game-panel" id="endGamePanel" style="display:none;">
+    <h2>🏆 Игра окончена</h2>
+    <p style="text-align:center; color:#4caf50; font-size:18px; font-weight:bold;">Выжили в убежище!</p>
+    <div id="finalPlayersList"></div>
+    <div style="text-align:center; margin-top:20px;">
+      <button id="restartBtn">Сыграть снова</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== ПЛАВАЮЩИЕ КНОПКИ ===== -->
+<button class="fab" id="fabBtn" title="Показать открытые характеристики" style="display:none;">👁️</button>
+<button class="fab" id="fabLog" title="Показать журнал" style="display:none;">📜</button>
+<button class="fab" id="fabRestart" title="Перезапустить игру" style="display:none;">🔄</button>
+
+<!-- ===== МОДАЛКА: ХАРАКТЕРИСТИКИ ===== -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="close-btn" id="closeRevealedBtn">Закрыть ✕</button>
+    <h2>👥 Характеристики игроков</h2>
+    <p class="hint">🔴 Красным выделены характеристики, которые игрок не успел раскрыть. У живых игроков нераскрытые характеристики не отображаются.</p>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- ===== МОДАЛКА: ЖУРНАЛ ===== -->
+<div class="modal-overlay" id="logModalOverlay">
+  <div class="modal">
+    <button class="close-btn" id="closeLogBtn">Закрыть ✕</button>
+    <h2>📜 Журнал</h2>
+    <div id="log" class="modal-log-content"></div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
+
+<!-- ===== МОДАЛКА: ПОДТВЕРЖДЕНИЕ ПЕРЕЗАПУСКА ===== -->
+<div class="modal-overlay" id="restartModalOverlay">
+  <div class="modal">
+    <button class="close-btn" id="closeRestartBtn">Закрыть ✕</button>
+    <h2>🔄 Перезапустить игру?</h2>
+    <p>Текущая партия будет потеряна. Все игроки и характеристики сбросятся.</p>
+    <div style="margin-top: 20px; text-align: center;">
+      <button id="confirmRestartBtn" style="background:#e94560; color:white;">Да, перезапустить</button>
+      <button id="cancelRestartBtn">Отмена</button>
+    </div>
+  </div>
+</div>
