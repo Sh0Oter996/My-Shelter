@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/Shelter/cmake-build-debug",
+  "command": "C:\\PROGRA~1\\JETBRA~1\\CLION2~1.2\\bin\\mingw\\bin\\G__~1.EXE -g -std=gnu++20 -fdiagnostics-color=always -o CMakeFiles\\Shelter.dir\\main.cpp.obj -c C:\\Shelter\\main.cpp",
+  "file": "C:/Shelter/main.cpp",
+  "output": "C:/Shelter/cmake-build-debug/CMakeFiles/Shelter.dir/main.cpp.obj"
+}
+]
