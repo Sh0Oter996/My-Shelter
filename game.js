@@ -43,6 +43,7 @@ let currentIndex = 0;
 let round = 1;
 let phase = "reveal";
 let voteRounds = [2, 4, 6];
+let voteQuotas = {};            // раунд -> сколько игроков изгнать на голосовании
 let survivorsTarget = 2;
 
 let votes = {};
@@ -53,6 +54,15 @@ let isTiebreak = false;
 let voteOrder = [];
 let voteCursor = 0;
 let pendingAction = null;
+
+// Сколько игроков ещё нужно изгнать в текущем раунде голосования
+let voteElimsRemaining = 0;
+// Сколько всего изгоняем в текущем раунде (для подписей «голосование X из Y»)
+let voteQuotaTotal = 0;
+// Номер текущего голосования внутри раунда
+let voteStep = 1;
+// Что произошло на предыдущем голосовании этого раунда
+let lastVoteOutcome = '';
 
 // ==================== УТИЛИТЫ ====================
 function shuffle(arr) {
@@ -178,7 +188,7 @@ function computeVoteRounds(totalPlayers, survivorsWanted) {
     const eliminationsNeeded = Math.max(0, totalPlayers - survivorsWanted);
     if (eliminationsNeeded === 0) return [];
 
-    const maxRounds = REVEALABLE_FIELDS.length; // 5
+    const maxRounds = REVEALABLE_FIELDS.length; // максимум раундов раскрытия
     const votesNeeded = eliminationsNeeded;
 
     if (votesNeeded >= maxRounds) {
@@ -192,6 +202,31 @@ function computeVoteRounds(totalPlayers, survivorsWanted) {
     return result;
 }
 
+// Автоматический план: раунды голосования и число изгнаний в каждом.
+// Если изгнаний больше, чем раундов раскрытия, распределяем их по раундам.
+function computeVotePlan(totalPlayers, survivorsWanted) {
+    const needed = Math.max(0, totalPlayers - survivorsWanted);
+    if (needed === 0) return { rounds: [], quotas: {} };
+
+    const maxRounds = REVEALABLE_FIELDS.length;
+    if (needed > maxRounds) {
+        const rounds = [];
+        const quotas = {};
+        for (let r = 1; r <= maxRounds; r++) rounds.push(r);
+        const base = Math.floor(needed / maxRounds);
+        const extra = needed % maxRounds;
+        rounds.forEach((r, index) => {
+            quotas[r] = base + (index < extra ? 1 : 0);
+        });
+        return { rounds, quotas };
+    }
+
+    const rounds = computeVoteRounds(totalPlayers, survivorsWanted);
+    const quotas = {};
+    rounds.forEach(r => { quotas[r] = 1; });
+    return { rounds, quotas };
+}
+
 function updateAutoVoteRounds(force = false) {
     const total = parseInt($('playerCount').value) || 4;
     let surv = parseInt($('survivorsCount').value) || 1;
@@ -199,10 +234,97 @@ function updateAutoVoteRounds(force = false) {
         surv = total - 1;
         $('survivorsCount').value = surv;
     }
-    const computed = computeVoteRounds(total, surv);
+    const plan = computeVotePlan(total, surv);
     const input = $('voteRoundsInput');
     if (force || input.value.trim() === '') {
-        input.value = computed.join(', ');
+        input.value = plan.rounds.join(', ');
+        voteQuotas = plan.quotas;
+    }
+}
+
+// ==================== ПЛАН ИЗГНАНИЙ ====================
+function getMaxEliminationsPerVote() {
+    const total = parseInt($('playerCount').value) || 4;
+    const surv = parseInt($('survivorsCount').value) || 1;
+    return Math.max(1, total - surv);
+}
+
+let renderedQuotaRoundsKey = null;
+
+// Строит строки «После раунда N изгнать K» и хранит значения в voteQuotas
+function renderVoteQuotaRows(force = false) {
+    const rounds = parseVoteRounds($('voteRoundsInput').value);
+    const key = rounds.join(',');
+    if (!force && key === renderedQuotaRoundsKey) {
+        updateVotePlanHint();
+        return;
+    }
+    renderedQuotaRoundsKey = key;
+
+    const maxElim = getMaxEliminationsPerVote();
+    const previous = voteQuotas;
+    voteQuotas = {};
+    rounds.forEach(r => {
+        const value = parseInt(previous[r]);
+        voteQuotas[r] = Math.max(1, Math.min(maxElim, isNaN(value) ? 1 : value));
+    });
+
+    const container = $('voteQuotaRows');
+    if (rounds.length === 0) {
+        container.innerHTML = '<i>Сначала задайте хотя бы один раунд голосования.</i>';
+        updateVotePlanHint();
+        return;
+    }
+
+    container.innerHTML = rounds.map(r => `
+        <div class="quota-row">
+            <span>После раунда <b>${r}</b> изгнать</span>
+            <input type="number" min="1" max="${maxElim}" value="${voteQuotas[r]}" data-quota-round="${r}">
+            <span>игрок(ов)</span>
+        </div>`).join('');
+
+    container.querySelectorAll('[data-quota-round]').forEach(input => {
+        const roundNumber = parseInt(input.dataset.quotaRound);
+        input.addEventListener('input', () => {
+            const value = parseInt(input.value);
+            if (!isNaN(value) && value >= 1) {
+                voteQuotas[roundNumber] = Math.min(getMaxEliminationsPerVote(), value);
+                updateVotePlanHint();
+            }
+        });
+        input.addEventListener('change', () => {
+            let value = parseInt(input.value);
+            if (isNaN(value)) value = 1;
+            value = Math.max(1, Math.min(getMaxEliminationsPerVote(), value));
+            input.value = value;
+            voteQuotas[roundNumber] = value;
+            updateVotePlanHint();
+        });
+    });
+
+    updateVotePlanHint();
+}
+
+function updateVotePlanHint() {
+    const el = $('votePlanHint');
+    const total = parseInt($('playerCount').value) || 4;
+    const surv = parseInt($('survivorsCount').value) || 1;
+    const needed = Math.max(0, total - surv);
+    const rounds = parseVoteRounds($('voteRoundsInput').value);
+    const planned = rounds.reduce((sum, r) => sum + (parseInt(voteQuotas[r]) || 1), 0);
+
+    if (rounds.length === 0) {
+        el.className = 'plan-hint warn';
+        el.innerHTML = '⚠️ Не задан ни один раунд голосования.';
+    } else if (planned === needed) {
+        el.className = 'plan-hint ok';
+        el.innerHTML = `✅ Будет изгнано <b>${planned}</b> — ровно столько, чтобы осталось <b>${surv}</b>.`;
+    } else if (planned > needed) {
+        el.className = 'plan-hint ok';
+        el.innerHTML = `Будет изгнано <b>${planned}</b>, нужно <b>${needed}</b>. Игра закончится, когда останется <b>${surv}</b>.`;
+    } else {
+        el.className = 'plan-hint warn';
+        el.innerHTML = `⚠️ Будет изгнано <b>${planned}</b>, а чтобы осталось <b>${surv}</b>, нужно <b>${needed}</b>. Добавьте изгнания, иначе игра не завершится.`;
     }
 }
 
@@ -238,8 +360,26 @@ function initGame() {
 
     voteRounds = parseVoteRounds($('voteRoundsInput').value);
     if (voteRounds.length === 0) {
-        voteRounds = computeVoteRounds(count, survivorsTarget);
-        if (voteRounds.length === 0) voteRounds = [2];
+        const autoPlan = computeVotePlan(count, survivorsTarget);
+        voteRounds = autoPlan.rounds;
+        voteQuotas = autoPlan.quotas;
+        $('voteRoundsInput').value = voteRounds.join(', ');
+    }
+
+    // Нормализуем план изгнаний для актуального списка раундов
+    const maxPerVote = Math.max(1, count - survivorsTarget);
+    const normalizedQuotas = {};
+    voteRounds.forEach(r => {
+        const value = parseInt(voteQuotas[r]);
+        normalizedQuotas[r] = Math.max(1, Math.min(maxPerVote, isNaN(value) ? 1 : value));
+    });
+    voteQuotas = normalizedQuotas;
+
+    const eliminationsNeeded = count - survivorsTarget;
+    const plannedEliminations = voteRounds.reduce((sum, r) => sum + voteQuotas[r], 0);
+    if (plannedEliminations < eliminationsNeeded) {
+        alert(`По плану изгоняется ${plannedEliminations} игрок(ов), а чтобы осталось ${survivorsTarget}, нужно изгнать ${eliminationsNeeded}. Увеличьте число изгнаний или уменьшите число выживших.`);
+        return;
     }
 
     const names = [];
@@ -259,6 +399,10 @@ function initGame() {
     votes = {};
     votedSet = new Set();
     voteCandidates = null;
+    voteElimsRemaining = 0;
+    voteQuotaTotal = 0;
+    voteStep = 1;
+    lastVoteOutcome = '';
 
     $('setup').style.display = 'none';
     $('gameArea').style.display = 'block';
@@ -266,10 +410,11 @@ function initGame() {
     $('fabLog').style.display = 'flex';
     $('fabRestart').style.display = 'flex';
 
+    const planText = voteRounds.map(r => `после раунда ${r} — изгнать ${voteQuotas[r]}`).join('; ');
     log("=== Игра началась! Игроков: " + count + " ===");
     log("Должно выжить: " + survivorsTarget);
     log("Профессии всех игроков открыты с начала игры.");
-    log("Голосование после раундов: " + voteRounds.join(', ') + ".");
+    log("Голосования: " + planText + ".");
     log("Раунд 1: каждый игрок раскрывает одну характеристику на свой выбор.");
 
     nextPlayerTurn();
@@ -300,7 +445,7 @@ function onPassConfirmed() {
 function nextPlayerTurn() {
     const remaining = players.filter(p => p.alive && !p._acted);
     if (remaining.length === 0) {
-        if (voteRounds.includes(round)) startVote();
+        if (voteRounds.includes(round)) startVoteRound();
         else nextRound();
         return;
     }
@@ -358,6 +503,23 @@ function nextRound() {
 }
 
 // ==================== ГОЛОСОВАНИЕ (БЕЗ ПРОМЕЖУТОЧНОГО ЭКРАНА) ====================
+// Запускает голосование, назначенное на текущий раунд. Если в этом раунде
+// изгоняем несколько игроков, сначала идёт первое голосование, а следующие —
+// сразу после каждого изгнания.
+function startVoteRound() {
+    const aliveCount = players.filter(p => p.alive).length;
+    const planned = Math.max(1, parseInt(voteQuotas[round]) || 1);
+    voteQuotaTotal = Math.max(0, Math.min(planned, aliveCount - survivorsTarget));
+    voteElimsRemaining = voteQuotaTotal;
+    voteStep = 1;
+    lastVoteOutcome = '';
+
+    if (voteQuotaTotal <= 0) { nextRound(); return; }
+
+    log(`--- Раунд ${round}: голосование. Нужно изгнать: ${voteQuotaTotal} ---`);
+    startVote();
+}
+
 function startVote(candidates = null) {
     phase = "vote";
     votes = {};
@@ -374,7 +536,7 @@ function startVote(candidates = null) {
     if (isTiebreak) {
         log(`--- Раунд ${round}: Переголосование среди лидеров (${candidates.join(', ')}) ---`);
     } else {
-        log(`--- Раунд ${round}: Анонимное голосование ---`);
+        log(`--- Раунд ${round}: Анонимное голосование ${voteStep} из ${voteQuotaTotal} ---`);
     }
 
     const alive = players.filter(p => p.alive);
@@ -400,6 +562,13 @@ function showVoteCard() {
     $('voteCardPanel').style.display = 'block';
     $('voteVoterName').textContent = voter.name;
     $('voteRound').textContent = round;
+    $('voteStepInfo').textContent = isTiebreak
+        ? '— переголосование'
+        : (voteQuotaTotal > 1 ? `— голосование ${voteStep} из ${voteQuotaTotal}` : '');
+    $('voteQuotaHint').innerHTML = isTiebreak
+        ? `Переголосование среди лидеров. В этом раунде осталось изгнать: <b>${voteElimsRemaining}</b>.`
+        : `В этом раунде изгоняем: <b>${voteQuotaTotal}</b>. Сейчас идёт голосование <b>${voteStep}</b> из <b>${voteQuotaTotal}</b>.`;
+    $('voteLastResult').textContent = lastVoteOutcome;
 
     let targets = players.filter(p => p.alive && p.name !== voter.name);
     if (voteCandidates) targets = targets.filter(p => voteCandidates.includes(p.name));
@@ -439,6 +608,10 @@ function castVote(targetName) {
 
 function showVoteResults() {
     $('voteResultRound').textContent = round;
+    $('voteResultStepInfo').textContent = isTiebreak
+        ? '— переголосование'
+        : (voteQuotaTotal > 1 ? `— голосование ${voteStep} из ${voteQuotaTotal}` : '');
+    $('voteResultQuotaHint').innerHTML = `В этом раунде нужно изгнать: <b>${voteQuotaTotal}</b>, уже изгнано: <b>${voteQuotaTotal - voteElimsRemaining}</b>.`;
 
     let html = '';
     const sorted = Object.entries(votes).sort((a, b) => b[1] - a[1]);
@@ -471,6 +644,15 @@ function applyVoteResults() {
     if (candidates.length === 0) {
         log("Никто не голосовал. Пропуск.");
         afterVoteStep();
+        return;
+    }
+
+    // Если лидеров ровно столько же, сколько ещё нужно изгнать, изгоняем всех сразу.
+    // Например, изгоняем двоих, а голоса разделились ровно между двумя лидерами —
+    // оба покидают убежище, второе голосование не запускается.
+    if (candidates.length > 1 && candidates.length === voteElimsRemaining) {
+        log(`⚖️ Голоса разделились ровно между ${candidates.length} лидерами: ${candidates.join(', ')}. Изгоняем всех сразу, дополнительное голосование не нужно.`);
+        eliminateSeveral(candidates);
         return;
     }
 
@@ -523,14 +705,40 @@ function castDeciderVote(targetName) {
     showVoteResults();
 }
 
-function eliminate(name) {
-    const eliminated = players.find(p => p.name === name);
-    if (eliminated) eliminated.alive = false;
-    log(`❌ <span class="player-tag">${name}</span> изгнан(а) из убежища.`);
+function markEliminated(name) {
+    const player = players.find(p => p.name === name);
+    if (!player || !player.alive) return;
+    player.alive = false;
+    log(`❌ <span class="player-tag">${player.name}</span> изгнан(а) из убежища.`);
+}
 
+function eliminate(name) {
+    markEliminated(name);
+    voteElimsRemaining = Math.max(0, voteElimsRemaining - 1);
+    lastVoteOutcome = `На предыдущем голосовании изгнан(а): ${name}.`;
+    afterEliminationStep();
+}
+
+// Изгнание нескольких игроков сразу (например, при равенстве голосов)
+function eliminateSeveral(names) {
+    names.forEach(markEliminated);
+    voteElimsRemaining = Math.max(0, voteElimsRemaining - names.length);
+    lastVoteOutcome = `На предыдущем голосовании изгнаны: ${names.join(', ')}.`;
+    afterEliminationStep();
+}
+
+function afterEliminationStep() {
     const aliveCount = players.filter(p => p.alive).length;
-    if (aliveCount <= survivorsTarget) endGame();
-    else afterVoteStep();
+    if (aliveCount <= survivorsTarget) { endGame(); return; }
+
+    if (voteElimsRemaining > 0) {
+        voteStep++;
+        log(`🗳️ Нужно изгнать ещё ${voteElimsRemaining}. Запускается голосование ${voteStep} из ${voteQuotaTotal}.`);
+        startVote();
+        return;
+    }
+
+    afterVoteStep();
 }
 
 function afterVoteStep() {
@@ -613,13 +821,22 @@ function closeModal(id) {
 document.addEventListener('DOMContentLoaded', () => {
     renderNameInputs();
     updateAutoVoteRounds(true);
+    renderVoteQuotaRows(true);
 
     $('playerCount').addEventListener('change', () => {
         renderNameInputs();
         updateAutoVoteRounds();
+        renderVoteQuotaRows(true);
     });
-    $('survivorsCount').addEventListener('change', updateAutoVoteRounds);
-    $('recalcBtn').addEventListener('click', () => updateAutoVoteRounds(true));
+    $('survivorsCount').addEventListener('change', () => {
+        updateAutoVoteRounds(true);
+        renderVoteQuotaRows(true);
+    });
+    $('voteRoundsInput').addEventListener('input', () => renderVoteQuotaRows());
+    $('recalcBtn').addEventListener('click', () => {
+        updateAutoVoteRounds(true);
+        renderVoteQuotaRows(true);
+    });
     $('startBtn').addEventListener('click', initGame);
     $('passBtn').addEventListener('click', onPassConfirmed);
     $('voteResultBtn').addEventListener('click', applyVoteResults);

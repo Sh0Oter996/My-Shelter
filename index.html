@@ -30,6 +30,13 @@
     <button id="recalcBtn" style="padding: 6px 14px; font-size: 14px;">↻ Пересчитать</button>
   </div>
 
+  <div style="margin-top: 16px;">
+    <h4 style="margin: 0 0 8px; color:#f0a500;">Сколько игроков изгонять на голосовании</h4>
+    <p class="hint" style="margin-top:0;">Для каждого раунда укажите, сколько игроков изгнать. Если больше одного — голосования идут подряд, по одному изгнанию за голосование. Если голоса разделятся ровно между таким количеством лидеров, они изгоняются сразу.</p>
+    <div id="voteQuotaRows"></div>
+    <p class="plan-hint" id="votePlanHint"></p>
+  </div>
+
   <br>
   <button id="startBtn">Начать игру</button>
 </div>
@@ -52,8 +59,10 @@
   </div>
 
   <div class="card" id="voteCardPanel" style="display:none;">
-    <h3>Голосование — Раунд <span id="voteRound"></span></h3>
+    <h3>Голосование — Раунд <span id="voteRound"></span> <span id="voteStepInfo" class="vote-step"></span></h3>
     <p class="hint">Ваш голос анонимен. Выберите, кого изгнать из убежища. Голос нельзя изменить.</p>
+    <p class="vote-quota" id="voteQuotaHint"></p>
+    <p class="vote-last-result" id="voteLastResult"></p>
     <p>Голосует: <span id="voteVoterName" class="player-tag"></span></p>
     <div id="voteButtons"></div>
     <div class="vote-progress">
@@ -72,8 +81,9 @@
   </div>
 
   <div class="card" id="voteResultPanel" style="display:none;">
-    <h3>Результаты голосования — Раунд <span id="voteResultRound"></span></h3>
+    <h3>Результаты голосования — Раунд <span id="voteResultRound"></span> <span id="voteResultStepInfo" class="vote-step"></span></h3>
     <div id="voteResults"></div>
+    <p class="vote-quota" id="voteResultQuotaHint"></p>
     <button id="voteResultBtn">Продолжить</button>
   </div>
 

@@ -217,3 +217,39 @@ button:disabled { background: #555; color: #999; cursor: not-allowed; }
 .end-game-panel .final-player.survivor { border-left: 4px solid #4caf50; }
 .end-game-panel .final-player.eliminated { border-left: 4px solid #e94560; opacity: 0.8; }
 .end-game-panel .final-player .hidden-trait { color: #e94560; }
+
+/* --- план изгнаний на голосованиях --- */
+.vote-step {
+    color: #af7ac5;
+    font-size: 16px;
+    font-weight: normal;
+}
+.vote-quota {
+    color: #f0a500;
+    font-size: 14px;
+    background: #0f0f1a;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 8px 0;
+}
+.vote-last-result {
+    color: #4caf50;
+    font-size: 14px;
+    margin: 8px 0;
+}
+.vote-last-result:empty { display: none; }
+
+.quota-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+}
+.quota-row span { font-size: 15px; }
+.plan-hint {
+    font-size: 14px;
+    margin: 10px 0 0;
+}
+.plan-hint.ok { color: #4caf50; }
+.plan-hint.warn { color: #ff6b81; }
