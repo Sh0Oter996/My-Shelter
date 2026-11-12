@@ -1,25 +1,41 @@
 'use strict';
 
+const CUSTOM_MARKER = "__custom__";
+
 // ==================== ДАННЫЕ ====================
 const POOLS = {
-    profession: ["Врач", "Инженер", "Учитель", "Фермер", "Охранник", "Повар", "Психолог", "Электрик", "Механик", "Биолог"],
-    health: ["Отличное", "Хорошее", "Среднее", "Слабое", "Хроническая болезнь", "Инвалидность", "Аллергия"],
-    age: [18, 22, 27, 34, 41, 55, 63],
-    hobby: ["Садоводство", "Рыбалка", "Чтение", "Спорт", "Ремонт техники", "Медитация", "Шахматы", "Рисование"],
-    phobia: ["Клаустрофобия", "Боязнь темноты", "Акрофобия", "Социофобия", "Нет фобий", "Боязнь воды", "Боязнь огня"],
-    skill: ["Первая помощь", "Взлом замков", "Радиосвязь", "Охота", "Кулинария", "Лидерство", "Ориентирование", "Стрельба"]
+    profession: ["Хирург", "Инженер", "Учитель начальных классов", "Фермер", "Охранник", "Охотник", "Сапёр", "Гимнаст", "Повар", "Психолог", "Электрик", "Механик", "Биолог", "Диджей", "Спецназовец", "МЧСник", "Блогер", "Священник", "Рэпер", "Инфоцыган", "Хакер", "Астролог", "Трейдер", "Модель", "Дизайнер", "Переводчик", "Геолог", "Пилот истребителя", "Стриптизёрша", "Вышибала", "Шахтер", "Курьер", "Мент", "Программист"],
+    sex: ["Мужчина", "Женщина"],
+    orientation: ["Гетеросексуальность", "Гомосексуальность", "Бисексуальность", "Асексуальность", "Аромантичность"],
+    health: ["Идеальное здоровье", "Астигматизм", "Диабет", "Альцгеймер", "Рак лёгких", "Туберкулёз", "Хламидиоз", "Гепатит C", "Гастрит", "Аритмия", "Аллергия на солнечный свет", "Аутизм", "ДЦП", "Синдром дауна", "Алкоголизм", "Никотиновая зависимость", "Гемофилия", "Полная слепота на один глаз", "Нет руки", "Нет ноги", "Covid-19", "Депрессия", "Плоскостопие", "Неправильный прикус", "Акне", "Герпес", "Бешенство", "Чума", "Перхоть", "Сломана рука", "Синдром туретта", "Карлик", "Нимфомания", "Насморк", "Серные пробки в ушах", "Диарея", "Геморрой", "Солнечные ожоги", "Облысение", "Синдром сухого глаза", "Растяжение ладышки", "Гиперлордоз", "Поясничная грыжа", "Альбинизм", "Корь", "Ветрянка", "Грипп", "Множественные укусы насекомых (нелетально)"],
+    age: [10, 14, 16, 18, 20, 22, 24, 27, 29, 30, 33, 34, 36, 39, 41, 44, 55, 59, 63, 67, 72, 75, 81, 87, 93, 99],
+    hobby: ["Садоводство", "Рыбалка", "Чтение книг", "Медитация", "Шахматы", "Рисование", "Стрельба из лука", "Муравьиная ферма", "Вязание", "Йога", "Клептомания", "Жонглирование", "Игра на гитаре", "Стрельба  из лука", "Спидкубинг", "Квадробинг", "Хобби-хорсинг", "Скалолазание"],
+    phobia: ["Клаустрофобия", "Боязнь темноты", "Акрофобия", "Социофобия", "Нет фобий", "Боязнь воды", "Боязнь огня", "Арахнофобия", "Боязнь глубины", "Трипофобия", "Боязнь животных", "Танатофобия", "Мизофобия", "Гемофобия", "Боязнь клоунов", "Номофобия", "Фобофобия", "Эргофобия", "Эйсоптрофобия", "Погонофобия", "Монофобия", "Аэрофобия", "Эротофобия", "Таргетпаника"],
+    skill: ["Первая помощь", "Взлом замков", "Радиосвязь", "Охота", "Кулинария", "Ориентирование", "Программирование", "Управление самолётом", "Фотографическая память", "Акробатика", "Каллиграфия", "Метание ножей", "Шитьё"],
+    character: ["Общительный", "Замкнутый", "Стрессоустойчивый", "Пофигист", "Вспыльчивый", "Доброжелательный", "Скромный", "Самокритичный", "Пацифист", "Гордый", "Трудолюбивый", "Ленивый", "Ответственный", "Безответственный", "Меркантильный", "Цундере", "Пикми", "Педантичный", "Оптимист", "Пессимист", "Реалист", "Щедрый", "Верный", "Вежливый", "Эмпатичный", "Эгоистичный", "Лицемер", "Пунктуальный", "Хозяйственный", "Отважный", "Бесстрашный", "Трусливый", "Любознательный", "Спонтанный", "Скептик", "Хладнокровный", "Циклоидный", "Застревающий"],
+    luggage1: [],
+    luggage2: [],
+    fact1: [],
+    fact2: []
 };
 
 const FIELDS = [
     { key: 'profession', label: 'Профессия' },
+    { key: 'sex', label: 'Пол', unique: false },
+    { key: 'orientation', label: 'Ориентация', unique: false },
     { key: 'health', label: 'Здоровье' },
-    { key: 'age', label: 'Возраст' },
-    { key: 'hobby', label: 'Хобби' },
+    { key: 'age', label: 'Возраст', customChance: 0.03 },
+    { key: 'hobby', label: 'Хобби', customChance: 0.1 },
     { key: 'phobia', label: 'Фобия' },
-    { key: 'skill', label: 'Навык' }
+    { key: 'skill', label: 'Навык', customChance: 0.1 },
+    { key: 'character', label: 'Характер', customChance: 0.2 },
+    { key: 'luggage1', label: 'Багаж 1', customChance: 0.07 },
+    { key: 'luggage2', label: 'Багаж 2', customChance: 0.07 },
+    { key: 'fact1', label: 'Факт1', customChance: 0.08 },
+    { key: 'fact2', label: 'Факт2', customChance: 0.08 }
 ];
 
-const REVEALABLE_FIELDS = FIELDS.filter(f => f.key !== 'profession');
+const REVEALABLE_FIELDS = FIELDS.filter(f => f.key !== 'profession' && f.key !== 'sex');
 
 // ==================== СОСТОЯНИЕ ====================
 let players = [];
@@ -64,26 +80,97 @@ function log(msg) {
 }
 
 function generatePlayers(count, names) {
-    const shuffled = {};
-    for (const key of Object.keys(POOLS)) {
-        const pool = ensurePoolSize(POOLS[key], count, "Вариант");
-        shuffled[key] = shuffle(pool).slice(0, count);
-    }
     const result = [];
     for (let i = 0; i < count; i++) {
-        result.push({
-            name: names[i],
-            profession: shuffled.profession[i],
-            health: shuffled.health[i],
-            age: shuffled.age[i],
-            hobby: shuffled.hobby[i],
-            phobia: shuffled.phobia[i],
-            skill: shuffled.skill[i],
-            alive: true,
-            revealed: { profession: true }
+        result.push({ name: names[i], alive: true, revealed: {} });
+    }
+
+    // по каждому полю отдельно
+    for (const key of Object.keys(POOLS)) {
+        const fieldMeta = FIELDS.find(f => f.key === key) || {};
+        const isUnique = fieldMeta.unique !== false;
+        const customChance = fieldMeta.customChance || 0;
+
+        // 1) бросаем кубик для каждого игрока — кому достанется маркер
+        const customPlayers = [];
+        const normalPlayers = [];
+        for (let i = 0; i < count; i++) {
+            if (customChance > 0 && Math.random() < customChance) {
+                customPlayers.push(i);
+            } else {
+                normalPlayers.push(i);
+            }
+        }
+
+        // 2) раздаём значения обычным игрокам
+        if (isUnique) {
+            // уникально — перемешиваем пул и берём по числу обычных игроков
+            const pool = ensurePoolSize(POOLS[key], normalPlayers.length, "Вариант");
+            const shuffled = shuffle(pool).slice(0, normalPlayers.length);
+            normalPlayers.forEach((playerIdx, j) => {
+                result[playerIdx][key] = shuffled[j];
+            });
+        } else {
+            // неуникально — каждому независимо случайное
+            normalPlayers.forEach(playerIdx => {
+                result[playerIdx][key] = randomItem(POOLS[key]);
+            });
+        }
+
+        // 3) помечаем маркером тех, кому достался «придумай сам»
+        customPlayers.forEach(playerIdx => {
+            result[playerIdx][key] = CUSTOM_MARKER;
         });
     }
+
+    // профессия и пол открыты с начала игры
+    result.forEach(p => {
+        p.revealed = { profession: true, sex: true };
+    });
     return result;
+}
+function randomItem(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+function displayValue(field, player) {
+    const raw = player[field.key];
+    if (raw === CUSTOM_MARKER) return '✏️ Придумай сам';
+    if (field.key === 'age') return player.age + ' лет';
+    return raw;
+}
+function revealTrait(key) {
+    const p = players[currentIndex];
+    if (p.revealed[key]) return;
+
+    const field = FIELDS.find(f => f.key === key);
+    let value = p[key];
+
+    // Если выпало «Придумай сам» — запрашиваем ввод у игрока
+    if (value === CUSTOM_MARKER) {
+        const input = prompt(`Вы выбрали «${field.label}: Придумай сам». Введите своё значение:`);
+        // Если игрок нажал "Отмена" или ввёл пустоту — не даём раскрыть
+        if (input === null) return;
+        const trimmed = input.trim();
+        if (trimmed === '') {
+            alert('Значение не может быть пустым.');
+            return;
+        }
+        // Заменяем маркер на введённое значение
+        p[key] = trimmed;
+        value = trimmed;
+    }
+
+    // Помечаем характеристику как раскрытую
+    p.revealed[key] = true;
+    p._acted = true;
+
+    // Записываем в журнал (используем displayValue, чтобы всё было красиво)
+    log(`<span class="player-tag">${p.name}</span> раскрывает <b>${field.label}: ${displayValue(field, p)}</b>`);
+
+    // Скрываем карточку и передаём ход дальше
+    $('revealPanel').style.display = 'none';
+    currentIndex = (currentIndex + 1) % players.length;
+    nextPlayerTurn();
 }
 
 // ==================== РАСЧЁТ РАУНДОВ ГОЛОСОВАНИЯ ====================
@@ -143,7 +230,7 @@ function parseVoteRounds(str) {
 
 function initGame() {
     const count = parseInt($('playerCount').value);
-    if (count < 4 || count > 8) { alert("Выберите 4–8 игроков."); return; }
+    if (count < 4 || count > 15) { alert("Выберите 4–15 игроков."); return; }
 
     survivorsTarget = parseInt($('survivorsCount').value) || 1;
     if (survivorsTarget >= count) { alert("Выживших должно быть меньше, чем игроков."); return; }
@@ -232,40 +319,35 @@ function showPlayerCard() {
     $('revealPanel').style.display = 'block';
     $('currentPlayerName').textContent = p.name;
 
-    let html = '';
+    // Профессия и пол — уже открыты всем, показываем отдельно, некликабельно
+    let html = `
+    <div class="trait revealed" style="margin-bottom: 8px;">
+        <span class="label">Профессия (уже открыта всем)</span>
+        <span class="value">${p.profession}</span>
+    </div>
+    <div class="trait revealed" style="margin-bottom: 12px;">
+        <span class="label">Пол (уже открыт всем)</span>
+        <span class="value">${p.sex}</span>
+    </div>
+`;
+
+    // Остальные характеристики — кликабельны, если ещё не раскрыты
     REVEALABLE_FIELDS.forEach(f => {
         const isRevealed = p.revealed[f.key];
         const cls = isRevealed ? 'trait revealed' : 'trait';
         html += `<div class="${cls}" ${isRevealed ? '' : `data-reveal="${f.key}"`}>
                     <span class="label">${f.label}</span>
-                    <span class="value">${p[f.key]}${f.key === 'age' ? ' лет' : ''}</span>
+                    <span class="value">${displayValue(f, p)}</span>
                 </div>`;
     });
     $('currentTraits').innerHTML = html;
 
-    // навешиваем обработчики
     $('currentTraits').querySelectorAll('[data-reveal]').forEach(el => {
         el.addEventListener('click', () => revealTrait(el.dataset.reveal));
     });
 
-    $('revealStatus').textContent = "Выберите характеристику.";
+    $('revealStatus').textContent = "Профессия уже раскрыта. Выберите одну из оставшихся характеристик.";
 }
-
-function revealTrait(key) {
-    const p = players[currentIndex];
-    if (p.revealed[key]) return;
-    p.revealed[key] = true;
-    p._acted = true;
-
-    const field = FIELDS.find(f => f.key === key);
-    const value = (key === 'age') ? p.age + " лет" : p[key];
-    log(`<span class="player-tag">${p.name}</span> раскрывает <b>${field.label}: ${value}</b>`);
-
-    $('revealPanel').style.display = 'none';
-    currentIndex = (currentIndex + 1) % players.length;
-    nextPlayerTurn();
-}
-
 function nextRound() {
     round++;
     phase = "reveal";
@@ -474,7 +556,7 @@ function endGame() {
         html += `<b class="player-tag">${p.name}</b>${isSurvivor ? ' 🟢 выжил' : ' 🔴 выбыл'}:<br>`;
         const lines = FIELDS.map(f => {
             const isRevealed = !!p.revealed[f.key];
-            const value = f.key === 'age' ? p.age + ' лет' : p[f.key];
+            const value = displayValue(f, p);
             if (isRevealed) return `• ${f.label}: <b>${value}</b>`;
             return `<span class="hidden-trait">• ${f.label}: ${value}</span>`;
         });
@@ -493,7 +575,7 @@ function openRevealedModal() {
         const isEliminated = !p.alive;
         const lines = FIELDS.map(f => {
             const isRevealed = !!p.revealed[f.key];
-            const value = f.key === 'age' ? p.age + ' лет' : p[f.key];
+            const value = displayValue(f, p);
             if (isRevealed) return `• ${f.label}: <b>${value}</b>`;
             if (isEliminated) return `<span class="hidden-trait">• ${f.label}: ${value}</span>`;
             return null;
