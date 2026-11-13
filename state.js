@@ -22,14 +22,20 @@ let voteQuotaTotal = 0;
 let voteStep = 1;
 let lastVoteOutcome = '';
 
-// Состояние бункера
-let resources = {};
-let stability = 0;
+// Бункер: стартовые параметры фиксированы, итоговые считаются только в финале
+let baseResources = {};
+let baseStability = 0;
+let finalResources = {};
+let finalStability = 0;
 let discoveredRoomIds = [];
 let openedRoomIds = [];
+let finalState = null;
 
 // Карты
 let actionCardOwnerIndex = null;
+
+// Экран предыстории
+let awaitingGameStart = false;
 
 // Финал
 let endingType = 'neutral';

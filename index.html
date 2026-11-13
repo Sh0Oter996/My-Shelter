@@ -51,10 +51,13 @@
 <!-- ===== ИГРА ===== -->
 <div id="gameArea" style="display:none;">
 
-  <div class="card" id="storyPanel" style="display:none; border-color: #f0a500;">
-    <h3 id="storyTitle" style="margin-top:0; color:#f0a500;"></h3>
-    <p id="storyDesc" style="font-style:italic; color:#ccc;"></p>
-    <div id="storyRooms" class="story-rooms"></div>
+  <div class="card bunker-bar" id="bunkerBar" style="display:none;">
+    <div class="bunker-bar-head">
+      <span><b>Сценарий:</b> <span id="bunkerBarTitle"></span></span>
+      <button id="openBunkerBtn" class="small-btn">🏠 История и комнаты</button>
+    </div>
+    <p class="hint" style="margin:4px 0 6px;">Стартовые параметры бункера. Они не меняются до финала; итог зависит от прошедших игроков и открытых комнат.</p>
+    <div id="bunkerResources" class="resources-bar"></div>
   </div>
 
   <div class="card pass-screen" id="passScreen" style="display:none;">
@@ -115,6 +118,7 @@
 <button class="fab" id="fabBtn" title="Показать открытые характеристики" style="display:none;">👁️</button>
 <button class="fab" id="fabLog" title="Показать журнал" style="display:none;">📜</button>
 <button class="fab" id="fabRestart" title="Перезапустить игру" style="display:none;">🔄</button>
+<button class="fab" id="fabStory" title="История, бункер и комнаты" style="display:none;">🏠</button>
 
 <!-- ===== МОДАЛКА: ХАРАКТЕРИСТИКИ ===== -->
 <div class="modal-overlay" id="modalOverlay">
@@ -132,6 +136,19 @@
     <button class="close-btn" id="closeLogBtn">Закрыть ✕</button>
     <h2>📜 Журнал</h2>
     <div id="log" class="modal-log-content"></div>
+  </div>
+</div>
+
+<!-- ===== МОДАЛКА: ИСТОРИЯ И БУНКЕР ===== -->
+<div class="modal-overlay" id="storyModalOverlay">
+  <div class="modal story-modal">
+    <button class="close-btn" id="closeStoryBtn">Закрыть ✕</button>
+    <h2 id="storyTitle">История бункера</h2>
+    <div id="storyDesc" class="story-desc"></div>
+    <div id="storyRooms" class="story-rooms"></div>
+    <div class="action-modal-footer">
+      <button id="storyContinueBtn">Продолжить</button>
+    </div>
   </div>
 </div>
 

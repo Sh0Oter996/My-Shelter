@@ -1,5 +1,41 @@
 'use strict';
 
+// Гарантируем, что у каждой закрытой/неисправной комнаты есть хотя бы один
+// потенциальный открыватель среди игроков. Если игрока с нужной профессией
+// или навыком нет, выдаём её одному из участников.
+function canOpenRoomForGuarantee(room, player) {
+    const professions = (room.unlock && room.unlock.professions) || [];
+    const skills = (room.unlock && room.unlock.skills) || [];
+    return professions.includes(player.profession) || skills.includes(player.skill);
+}
+
+function ensureRoomOpeners(list) {
+    if (!SCENARIO) return;
+    const rooms = SCENARIO.rooms.filter(room => (room.locked || room.broken) && room.unlock);
+
+    rooms.forEach(room => {
+        if (list.some(p => canOpenRoomForGuarantee(room, p))) return;
+
+        const isSoleOpener = player => rooms.some(other => {
+            if (other === room) return false;
+            if (!canOpenRoomForGuarantee(other, player)) return false;
+            return !list.some(q => q !== player && canOpenRoomForGuarantee(other, q));
+        });
+
+        let candidates = list.filter(p => !isSoleOpener(p));
+        if (candidates.length === 0) candidates = list;
+
+        const chosen = randomItem(candidates);
+        const professions = (room.unlock.professions || []);
+        const skills = (room.unlock.skills || []);
+        if (professions.length > 0) {
+            chosen.profession = randomItem(professions);
+        } else if (skills.length > 0) {
+            chosen.skill = randomItem(skills);
+        }
+    });
+}
+
 function generatePlayers(count, names) {
     const result = [];
     for (let i = 0; i < count; i++) {
@@ -54,6 +90,7 @@ function generatePlayers(count, names) {
     }
 
     // профессия и пол открыты с начала игры
+    ensureRoomOpeners(result);
     result.forEach(p => {
         p.revealed = { profession: true, sex: true };
     });
@@ -165,15 +202,18 @@ function initGame() {
     lastVoteOutcome = '';
     actionCardOwnerIndex = null;
     endingType = 'neutral';
+    finalState = null;
+    awaitingGameStart = false;
 
     $('setup').style.display = 'none';
     $('gameArea').style.display = 'block';
     $('endGamePanel').style.display = 'none';
     $('endingBlock').innerHTML = '';
-    $('storyPanel').style.display = 'block';
+    $('bunkerBar').style.display = 'block';
     $('fabBtn').style.display = 'flex';
     $('fabLog').style.display = 'flex';
     $('fabRestart').style.display = 'flex';
+    $('fabStory').style.display = 'flex';
 
     log(`<b>=== ${SCENARIO.title} ===</b>`);
     log(`<i>${SCENARIO.apocalypse}</i>`);
@@ -187,11 +227,12 @@ function initGame() {
     log("Голосования: " + planText + ".");
     log("Раунд 1: каждый игрок раскрывает одну характеристику на свой выбор.");
 
-    // Ресурсы, стартовые комнаты, условия входа и первая отрисовка бункера
-    resetScenarioRuntime();
-
-    nextPlayerTurn();
+    // Фиксируем стартовые параметры, открываем известные комнаты и показываем предысторию.
+    prepareScenario();
+    awaitingGameStart = true;
+    openStoryModal(true);
 }
+
 
 function computeVoteRounds(totalPlayers, survivorsWanted) {
     const eliminationsNeeded = Math.max(0, totalPlayers - survivorsWanted);
