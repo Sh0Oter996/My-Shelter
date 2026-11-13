@@ -21,4 +21,15 @@ let voteElimsRemaining = 0;
 let voteQuotaTotal = 0;
 let voteStep = 1;
 let lastVoteOutcome = '';
-let secretRoomsUnlocked = [];
+
+// Состояние бункера
+let resources = {};
+let stability = 0;
+let discoveredRoomIds = [];
+let openedRoomIds = [];
+
+// Карты
+let actionCardOwnerIndex = null;
+
+// Финал
+let endingType = 'neutral';

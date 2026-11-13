@@ -206,6 +206,16 @@ button:disabled { background: #555; color: #999; cursor: not-allowed; }
     padding: 30px;
     margin: 16px 0;
 }
+.end-game-panel.neutral {
+    background: #2a2414;
+    border-color: #f0a500;
+}
+.end-game-panel.neutral h2 { color: #f0a500; }
+.end-game-panel.bad {
+    background: #2a1414;
+    border-color: #e94560;
+}
+.end-game-panel.bad h2 { color: #ff6b81; }
 .end-game-panel h2 { color: #4caf50; font-size: 28px; margin: 0 0 16px; text-align: center; }
 .end-game-panel .final-player {
     background: #0f0f1a;
@@ -253,3 +263,174 @@ button:disabled { background: #555; color: #999; cursor: not-allowed; }
 }
 .plan-hint.ok { color: #4caf50; }
 .plan-hint.warn { color: #ff6b81; }
+
+/* --- выбор сценария --- */
+select {
+    background: #0f0f1a;
+    color: #fff;
+    border: 1px solid #2a3a5e;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 15px;
+    max-width: 100%;
+    margin: 4px 0;
+}
+select:focus { outline: 1px solid #f0a500; }
+
+/* --- сценарий и бункер --- */
+.story-meta {
+    color: #8fa3c8;
+    font-size: 14px;
+}
+.story-rooms { margin-top: 10px; }
+.resources-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+}
+.resource-chip {
+    background: #0f0f1a;
+    border: 1px solid #2a3a5e;
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 13px;
+}
+.resource-chip b { color: #f0a500; }
+.resource-chip.low { border-color: #e94560; }
+.resource-chip.low b { color: #ff6b81; }
+
+.rooms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+.room-card {
+    background: #0f0f1a;
+    border: 1px solid #2a3a5e;
+    border-left: 4px solid #2a3a5e;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+}
+.room-card.open { border-left-color: #4caf50; }
+.room-card.locked { border-left-color: #f0a500; }
+.room-card.broken { border-left-color: #e94560; }
+.room-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+    margin-bottom: 6px;
+    color: #fff;
+}
+.room-status {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #8fa3c8;
+    white-space: nowrap;
+}
+.room-card.open .room-status { color: #4caf50; }
+.room-card.locked .room-status { color: #f0a500; }
+.room-card.broken .room-status { color: #e94560; }
+.room-desc { color: #b8b8c8; margin-bottom: 6px; }
+.room-loot { color: #cfcfda; line-height: 1.5; }
+.room-loot.unknown { color: #777; font-style: italic; }
+.room-lock {
+    color: #f0a500;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+.room-hint { color: #8fa3c8; font-size: 13px; margin: 10px 0 0; }
+
+/* --- секретные карты игрока --- */
+.secret-card {
+    border: 1px dashed #9b59b6;
+    background: #1e1430;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 10px 0;
+}
+.secret-card.action-card {
+    border-color: #f0a500;
+    background: #2a1a3e;
+}
+.secret-card.condition-card.triggered { border-color: #4caf50; }
+.secret-card-title {
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #af7ac5;
+    margin-bottom: 4px;
+}
+.secret-card-name {
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 4px;
+}
+.secret-card-desc { font-size: 13px; color: #c8c8d8; line-height: 1.45; }
+.secret-card-state {
+    font-size: 12px;
+    color: #8fa3c8;
+    margin-top: 6px;
+}
+.secret-card-state.used { color: #e94560; }
+.secret-card.condition-card.triggered .secret-card-state { color: #4caf50; }
+.card-btn {
+    margin-top: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+}
+.bonus-luggage {
+    background: #102a10;
+    border: 1px solid #4caf50;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 13px;
+    color: #b8e6b8;
+}
+
+/* --- модалка карты действия --- */
+.action-modal { max-width: 620px; }
+.action-label {
+    display: block;
+    margin: 12px 0 6px;
+    color: #f0a500;
+    font-size: 14px;
+}
+.action-modal select {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+    box-sizing: border-box;
+}
+.action-modal-footer {
+    text-align: center;
+    margin-top: 16px;
+}
+
+/* --- концовка --- */
+.ending-block {
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+.ending-block.good { background: #163816; border: 1px solid #4caf50; }
+.ending-block.neutral { background: #3a2f1a; border: 1px solid #f0a500; }
+.ending-block.bad { background: #3a1616; border: 1px solid #e94560; }
+.ending-block h3 { margin: 0 0 10px; }
+.ending-block.good h3 { color: #4caf50; }
+.ending-block.neutral h3 { color: #f0a500; }
+.ending-block.bad h3 { color: #ff6b81; }
+.ending-block p { margin: 8px 0; }
+.final-extra {
+    display: block;
+    margin-top: 8px;
+    color: #af7ac5;
+    font-size: 13px;
+}

@@ -1,8 +1,18 @@
 'use strict';
+
 function generatePlayers(count, names) {
     const result = [];
     for (let i = 0; i < count; i++) {
-        result.push({ name: names[i], alive: true, revealed: {} });
+        result.push({
+            name: names[i],
+            alive: true,
+            revealed: {},
+            bonusLuggage: [],
+            actionCard: null,
+            actionCardUsed: false,
+            conditionCard: null,
+            conditionCardTriggered: false
+        });
     }
 
     // по каждому полю отдельно
@@ -47,11 +57,51 @@ function generatePlayers(count, names) {
     result.forEach(p => {
         p.revealed = { profession: true, sex: true };
     });
-    result.forEach(p => {
-        p.actionCard = randomItem(ACTION_CARDS);
+
+    // секретные карты: действие и условие
+    const actionDeck = shuffle(ACTION_CARDS);
+    const conditionDeck = shuffle(CONDITION_CARDS);
+    result.forEach((p, i) => {
+        p.actionCard = actionDeck[i % actionDeck.length];
+        p.conditionCard = conditionDeck[i % conditionDeck.length];
     });
+
     return result;
 }
+
+function pickScenario() {
+    const select = $('scenarioSelect');
+    const id = select ? select.value : 'random';
+    if (id && id !== 'random') {
+        const found = SCENARIOS.find(s => s.id === id);
+        if (found) return found;
+    }
+    return randomItem(SCENARIOS);
+}
+
+function populateScenarioSelect() {
+    const select = $('scenarioSelect');
+    if (!select) return;
+    select.innerHTML = '<option value="random">🎲 Случайный сценарий</option>' +
+        SCENARIOS.map(s => `<option value="${s.id}">${s.title}</option>`).join('');
+    updateScenarioHint();
+}
+
+function updateScenarioHint() {
+    const hint = $('scenarioHint');
+    if (!hint) return;
+    const select = $('scenarioSelect');
+    const scenario = select && select.value !== 'random'
+        ? SCENARIOS.find(s => s.id === select.value)
+        : null;
+
+    if (scenario) {
+        hint.innerHTML = `<b>${scenario.title}</b><br>${scenario.bunkerSize}<br><i>${scenario.apocalypse}</i>`;
+    } else {
+        hint.textContent = 'Сценарий, бункер, комнаты и концовка выбираются случайно при старте игры.';
+    }
+}
+
 function initGame() {
     const count = parseInt($('playerCount').value);
     if (count < 4 || count > 15) { alert("Выберите 4–15 игроков."); return; }
@@ -60,12 +110,20 @@ function initGame() {
     if (survivorsTarget >= count) { alert("Выживших должно быть меньше, чем игроков."); return; }
     if (survivorsTarget < 1) { alert("Выживших должно быть хотя бы 1."); return; }
 
+    SCENARIO = pickScenario();
+
     voteRounds = parseVoteRounds($('voteRoundsInput').value);
     if (voteRounds.length === 0) {
         const autoPlan = computeVotePlan(count, survivorsTarget);
         voteRounds = autoPlan.rounds;
         voteQuotas = autoPlan.quotas;
         $('voteRoundsInput').value = voteRounds.join(', ');
+    }
+
+    const maxRevealRound = REVEALABLE_FIELDS.length;
+    if (voteRounds.some(r => r > maxRevealRound)) {
+        alert(`Голосование можно назначить не позже ${maxRevealRound}-го раунда: к этому моменту все характеристики уже раскрыты.`);
+        return;
     }
 
     // Нормализуем план изгнаний для актуального списка раундов
@@ -105,29 +163,22 @@ function initGame() {
     voteQuotaTotal = 0;
     voteStep = 1;
     lastVoteOutcome = '';
-
-    // Показываем сюжет в лог
-    log(`<b>=== ${SCENARIO.title} ===</b>`);
-    log(`<i>${SCENARIO.apocalypse}</i>`);
-    log(`<i>${SCENARIO.bunkerDesc}</i>`);
-    log(`В бункере есть: ${SCENARIO.rooms.map(r => r.name).join(', ')}.`);
+    actionCardOwnerIndex = null;
+    endingType = 'neutral';
 
     $('setup').style.display = 'none';
     $('gameArea').style.display = 'block';
-    // ВЫВОД ПРЕДЫСТОРИИ НА ЭКРАН
-    if (typeof SCENARIO !== 'undefined') {
-        $('storyPanel').style.display = 'block';
-        $('storyTitle').textContent = SCENARIO.title;
-        $('storyDesc').innerHTML = `<b>Апокалипсис:</b> ${SCENARIO.apocalypse}<br><br><b>Бункер:</b> ${SCENARIO.bunkerDesc}`;
-        $('storyRooms').innerHTML = `<b>Комнаты в бункере:</b> ${SCENARIO.rooms.map(r => r.name).join(', ')}.`;
-    } else {
-        $('storyPanel').style.display = 'block';
-        $('storyTitle').textContent = "Ошибка";
-        $('storyDesc').textContent = "Объект SCENARIO не найден. Проверьте файл config.js.";
-    }
+    $('endGamePanel').style.display = 'none';
+    $('endingBlock').innerHTML = '';
+    $('storyPanel').style.display = 'block';
     $('fabBtn').style.display = 'flex';
     $('fabLog').style.display = 'flex';
     $('fabRestart').style.display = 'flex';
+
+    log(`<b>=== ${SCENARIO.title} ===</b>`);
+    log(`<i>${SCENARIO.apocalypse}</i>`);
+    log(`<i>${SCENARIO.bunkerDesc}</i>`);
+    log(`<b>Размеры бункера:</b> ${SCENARIO.bunkerSize}`);
 
     const planText = voteRounds.map(r => `после раунда ${r} — изгнать ${voteQuotas[r]}`).join('; ');
     log("=== Игра началась! Игроков: " + count + " ===");
@@ -136,8 +187,12 @@ function initGame() {
     log("Голосования: " + planText + ".");
     log("Раунд 1: каждый игрок раскрывает одну характеристику на свой выбор.");
 
+    // Ресурсы, стартовые комнаты, условия входа и первая отрисовка бункера
+    resetScenarioRuntime();
+
     nextPlayerTurn();
 }
+
 function computeVoteRounds(totalPlayers, survivorsWanted) {
     const eliminationsNeeded = Math.max(0, totalPlayers - survivorsWanted);
     if (eliminationsNeeded === 0) return [];
@@ -155,6 +210,7 @@ function computeVoteRounds(totalPlayers, survivorsWanted) {
     for (let r = startRound; r <= maxRounds; r++) result.push(r);
     return result;
 }
+
 function computeVotePlan(totalPlayers, survivorsWanted) {
     const needed = Math.max(0, totalPlayers - survivorsWanted);
     if (needed === 0) return { rounds: [], quotas: {} };
@@ -177,6 +233,7 @@ function computeVotePlan(totalPlayers, survivorsWanted) {
     rounds.forEach(r => { quotas[r] = 1; });
     return { rounds, quotas };
 }
+
 function updateAutoVoteRounds(force = false) {
     const total = parseInt($('playerCount').value) || 4;
     let surv = parseInt($('survivorsCount').value) || 1;
@@ -191,6 +248,7 @@ function updateAutoVoteRounds(force = false) {
         voteQuotas = plan.quotas;
     }
 }
+
 function getMaxEliminationsPerVote() {
     const total = parseInt($('playerCount').value) || 4;
     const surv = parseInt($('survivorsCount').value) || 1;
@@ -198,6 +256,7 @@ function getMaxEliminationsPerVote() {
 }
 
 let renderedQuotaRoundsKey = null;
+
 function renderVoteQuotaRows(force = false) {
     const rounds = parseVoteRounds($('voteRoundsInput').value);
     const key = rounds.join(',');
@@ -250,6 +309,7 @@ function renderVoteQuotaRows(force = false) {
 
     updateVotePlanHint();
 }
+
 function updateVotePlanHint() {
     const el = $('votePlanHint');
     const total = parseInt($('playerCount').value) || 4;
@@ -272,6 +332,7 @@ function updateVotePlanHint() {
         el.innerHTML = `⚠️ Будет изгнано <b>${planned}</b>, а чтобы осталось <b>${surv}</b>, нужно <b>${needed}</b>. Добавьте изгнания, иначе игра не завершится.`;
     }
 }
+
 function renderNameInputs() {
     const count = parseInt($('playerCount').value);
     const container = $('nameInputs');

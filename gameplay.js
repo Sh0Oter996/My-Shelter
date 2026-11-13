@@ -1,6 +1,226 @@
 'use strict';
 
-// === РАСКРЫТИЕ ===
+// ==================== БУНКЕР: КОМНАТЫ, РЕСУРСЫ, СЦЕНАРИЙ ====================
+function isRoomDiscovered(room) {
+    return !room.discoverRound || discoveredRoomIds.includes(room.id);
+}
+
+function isRoomOpened(room) {
+    return openedRoomIds.includes(room.id);
+}
+
+function roomStatus(room) {
+    if (!isRoomDiscovered(room)) return 'hidden';
+    if (isRoomOpened(room)) return 'open';
+    if (room.broken) return 'broken';
+    if (room.locked) return 'locked';
+    return 'open';
+}
+
+function findRoomOpener(room) {
+    if (!room.unlock) return null;
+    const professions = room.unlock.professions || [];
+    const skills = room.unlock.skills || [];
+    return players.find(p => p.alive && (
+        professions.includes(p.profession) ||
+        (p.revealed && p.revealed.skill && skills.includes(p.skill))
+    )) || null;
+}
+
+function changeResource(key, delta, reason) {
+    if (typeof resources[key] !== 'number') resources[key] = 0;
+    resources[key] = Math.max(0, resources[key] + delta);
+    const meta = RESOURCE_META[key] || { label: key, icon: '•' };
+    log(`${meta.icon} ${meta.label}: <b>${signed(delta)}</b>${reason ? ` — ${reason}` : ''} (теперь ${resources[key]})`);
+    if (SCENARIO) renderStoryPanel();
+}
+
+function changeStability(delta, reason) {
+    stability = Math.max(-5, Math.min(5, stability + delta));
+    log(`🧠 Стабильность: <b>${signed(delta)}</b>${reason ? ` — ${reason}` : ''} (теперь ${stability})`);
+    if (SCENARIO) renderStoryPanel();
+}
+
+function openRoom(room, opener) {
+    if (isRoomOpened(room)) return;
+    openedRoomIds.push(room.id);
+
+    if (opener) {
+        const verb = room.broken ? 'починил(а)' : 'открыл(а)';
+        log(`🔓 <span class="player-tag">${opener.name}</span> ${verb} помещение «${room.name}».`);
+    } else {
+        log(`🔓 Доступно помещение «${room.name}».`);
+    }
+
+    (room.inventory || []).forEach(item => {
+        log(`&nbsp;&nbsp;• <b>${item.name}</b> — ${item.desc}`);
+        (item.effects || []).forEach(effect => {
+            if (effect.resource) changeResource(effect.resource, effect.delta, `находка в «${room.name}»`);
+            if (effect.stability) changeStability(effect.stability, `находка в «${room.name}»`);
+        });
+    });
+}
+
+function checkRoomEvents() {
+    if (!SCENARIO) return;
+    let changed = false;
+
+    // 1. Открываем сведения о скрытых комнатах, когда приходит их раунд
+    SCENARIO.rooms.forEach(room => {
+        if (!isRoomDiscovered(room) && room.discoverRound && round >= room.discoverRound) {
+            discoveredRoomIds.push(room.id);
+            changed = true;
+            log(`🔍 <b>Новое помещение:</b> «${room.name}». ${room.desc}`);
+            if (room.locked || room.broken) {
+                log(`&nbsp;&nbsp;Дверь ${room.broken ? 'неисправна' : 'заперта'}: ${room.unlock ? room.unlock.text : 'нужен особый доступ'}.`);
+            }
+        }
+    });
+
+    // 2. Открываем или ремонтируем комнаты, если в бункере есть нужный специалист
+    SCENARIO.rooms.forEach(room => {
+        if (!isRoomDiscovered(room) || isRoomOpened(room)) return;
+
+        if (!room.locked && !room.broken) {
+            openRoom(room, null);
+            changed = true;
+            return;
+        }
+
+        const opener = findRoomOpener(room);
+        if (opener) {
+            openRoom(room, opener);
+            changed = true;
+        }
+    });
+
+    renderStoryPanel();
+}
+
+function resourcesBarHtml() {
+    const parts = Object.keys(RESOURCE_META).map(key => {
+        const meta = RESOURCE_META[key];
+        const value = resources[key] || 0;
+        return `<span class="resource-chip ${value <= 1 ? 'low' : ''}">${meta.icon} ${meta.label}: <b>${value}</b></span>`;
+    });
+    parts.push(`<span class="resource-chip ${stability < 0 ? 'low' : ''}">🧠 Стабильность: <b>${signed(stability)}</b></span>`);
+    return `<div class="resources-bar">${parts.join('')}</div>`;
+}
+
+function roomCardHtml(room) {
+    const status = roomStatus(room);
+    const labels = { open: 'открыта', locked: 'заперта', broken: 'неисправна' };
+    let html = `<div class="room-card ${status}">`;
+    html += `<div class="room-head"><b>${room.name}</b><span class="room-status">${labels[status] || ''}</span></div>`;
+    html += `<div class="room-desc">${room.desc}</div>`;
+
+    if (status === 'open') {
+        const loot = (room.inventory || [])
+            .map(item => `• ${item.name} — ${item.desc}`)
+            .join('<br>');
+        html += `<div class="room-loot"><b>Найдено:</b><br>${loot || 'ничего полезного'}</div>`;
+    } else {
+        html += `<div class="room-lock">🔒 ${room.unlock ? room.unlock.text : 'нужен особый доступ'}</div>`;
+        html += `<div class="room-loot unknown">Содержимое пока неизвестно.</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function renderStoryPanel() {
+    if (!SCENARIO) return;
+    const panel = $('storyPanel');
+    if (!panel) return;
+
+    panel.style.display = 'block';
+    $('storyTitle').textContent = SCENARIO.title;
+    $('storyDesc').innerHTML =
+        `<b>Апокалипсис:</b> ${SCENARIO.apocalypse}<br><br>` +
+        `<b>Бункер:</b> ${SCENARIO.bunkerDesc}` +
+        (SCENARIO.bunkerSize ? `<br><span class="story-meta">${SCENARIO.bunkerSize}</span>` : '');
+
+    const knownRooms = SCENARIO.rooms.filter(isRoomDiscovered);
+    const hiddenCount = SCENARIO.rooms.length - knownRooms.length;
+
+    let html = resourcesBarHtml();
+    html += `<div class="rooms-grid">${knownRooms.map(roomCardHtml).join('')}</div>`;
+    if (hiddenCount > 0) {
+        html += `<p class="room-hint">🚪 За закрытыми дверями осталось помещений: <b>${hiddenCount}</b>. Возможно, вы найдёте их позже.</p>`;
+    } else {
+        html += `<p class="room-hint">Все помещения бункера известны.</p>`;
+    }
+
+    $('storyRooms').innerHTML = html;
+}
+
+function resetScenarioRuntime() {
+    resources = Object.assign({}, SCENARIO.startResources || {});
+    stability = 0;
+    discoveredRoomIds = [];
+    openedRoomIds = [];
+    endingType = 'neutral';
+
+    players.forEach(p => {
+        p.bonusLuggage = p.bonusLuggage || [];
+        p.actionCardUsed = false;
+        p.conditionCardTriggered = false;
+        p._acted = false;
+    });
+
+    checkRoomEvents();
+    players.forEach(p => triggerCondition(p, 'start'));
+    triggerRoundConditions();
+    renderStoryPanel();
+}
+
+// ==================== КАРТЫ УСЛОВИЙ ====================
+function triggerRoundConditions() {
+    players.filter(p => p.alive).forEach(p => triggerCondition(p, 'round'));
+}
+
+function triggerCondition(player, trigger) {
+    const card = player.conditionCard;
+    if (!card || player.conditionCardTriggered) return;
+    if (card.trigger !== trigger) return;
+    if (trigger === 'round' && card.round !== round) return;
+
+    player.conditionCardTriggered = true;
+    log(`🎴 <b>Условие «${card.name}»</b> срабатывает у <span class="player-tag">${player.name}</span>: ${card.desc}`);
+    applyConditionEffect(player, card.effect || {});
+}
+
+function applyConditionEffect(player, effect) {
+    if (effect.luggage) {
+        player.bonusLuggage = player.bonusLuggage || [];
+        player.bonusLuggage.push(effect.luggage);
+        log(`🎒 <span class="player-tag">${player.name}</span> получает бонусный багаж: <b>${effect.luggage}</b>.`);
+    }
+    if (effect.resource) {
+        changeResource(effect.resource.key, effect.resource.delta, `условие «${player.conditionCard.name}»`);
+    }
+    if (effect.stability) {
+        changeStability(effect.stability, `условие «${player.conditionCard.name}»`);
+    }
+    if (effect.revealHiddenRoom) {
+        revealHiddenRoomByCondition(player);
+    }
+}
+
+function revealHiddenRoomByCondition(player) {
+    const hidden = SCENARIO.rooms.filter(room => !isRoomDiscovered(room));
+    if (hidden.length === 0) {
+        log(`🔍 ${player.name} ищет тайное помещение, но все комнаты уже известны.`);
+        return;
+    }
+
+    const room = hidden[hidden.length - 1];
+    discoveredRoomIds.push(room.id);
+    log(`🔍 <span class="player-tag">${player.name}</span> находит схему и тайное помещение: «${room.name}». ${room.desc}`);
+    checkRoomEvents();
+}
+
+// ==================== РАСКРЫТИЕ ====================
 function showPassScreen(title, playerName, action) {
     $('passTitle').textContent = title;
     $('passPlayerName').textContent = playerName;
@@ -23,11 +243,6 @@ function onPassConfirmed() {
 
 // ==================== ХОД ИГРОКА (РАСКРЫТИЕ) ====================
 function nextPlayerTurn() {
-    // Открываем новые комнаты на 3-м раунде
-    if (round === 3 && !secretRoomsUnlocked.includes('Генераторная')) {
-        secretRoomsUnlocked.push('Генераторная');
-        log(`<b>🔓 Новое открытие!</b> Вы нашли способ пробраться в Генераторную. Внутри: ящик с инструментами и запас топлива на неделю.`);
-    }
     const remaining = players.filter(p => p.alive && !p._acted);
     if (remaining.length === 0) {
         if (voteRounds.includes(round)) startVoteRound();
@@ -42,6 +257,36 @@ function nextPlayerTurn() {
     }
 
     showPassScreen("Передайте устройство", players[currentIndex].name, 'reveal');
+}
+
+function secretCardsHtml(p) {
+    let html = '';
+
+    if (p.actionCard) {
+        html += `<div class="secret-card action-card">` +
+            `<div class="secret-card-title">🃏 Секретная карта действия</div>` +
+            `<div class="secret-card-name">${p.actionCard.icon || ''} ${p.actionCard.name}</div>` +
+            `<div class="secret-card-desc">${p.actionCard.desc}</div>` +
+            (p.actionCardUsed
+                ? '<div class="secret-card-state used">Карта использована</div>'
+                : '<button class="card-btn" onclick="openActionCardModal()">Активировать карту</button>') +
+            `</div>`;
+    }
+
+    if (p.conditionCard) {
+        html += `<div class="secret-card condition-card ${p.conditionCardTriggered ? 'triggered' : ''}">` +
+            `<div class="secret-card-title">🎴 Секретное условие</div>` +
+            `<div class="secret-card-name">${p.conditionCard.name}</div>` +
+            `<div class="secret-card-desc">${p.conditionCard.desc}</div>` +
+            `<div class="secret-card-state">${p.conditionCardTriggered ? '✅ Условие уже сработало' : '⏳ Условие ещё не сработало'}</div>` +
+            `</div>`;
+    }
+
+    if (p.bonusLuggage && p.bonusLuggage.length) {
+        html += `<div class="bonus-luggage">🎒 Бонусный багаж: <b>${p.bonusLuggage.join(', ')}</b></div>`;
+    }
+
+    return html;
 }
 
 function showPlayerCard() {
@@ -59,13 +304,9 @@ function showPlayerCard() {
         <span class="label">Пол (уже открыт всем)</span>
         <span class="value">${p.sex}</span>
     </div>
-    html += \`
-    <div class="action-card" style="border: 1px dashed #f0a500; padding: 10px; margin: 10px 0; background: #2a1a3e;">
-        <span class="label" style="color:#f0a500; font-weight:bold;">Секретная карта действия</span>
-        <span class="value">${p.actionCard ? p.actionCard.name + ': ' + p.actionCard.desc : 'Нет карты'}</span>
-        ${p.actionCard && !p.actionCardUsed ? `<button onclick="startActionCard()" style="margin-top: 8px; font-size: 14px;">Активировать</button>` : '<span style="color:#e94560; font-size:12px;">(Использована)</span>'}
-    </div>
-`;
+    `;
+
+    html += secretCardsHtml(p);
 
     // Остальные характеристики — кликабельны, если ещё не раскрыты
     REVEALABLE_FIELDS.forEach(f => {
@@ -84,6 +325,7 @@ function showPlayerCard() {
 
     $('revealStatus').textContent = "Профессия уже раскрыта. Выберите одну из оставшихся характеристик.";
 }
+
 function revealTrait(key) {
     const p = players[currentIndex];
     if (p.revealed[key]) return;
@@ -109,48 +351,202 @@ function revealTrait(key) {
 
     log(`<span class="player-tag">${p.name}</span> раскрывает <b>${field.label}: ${displayValue(field, p)}</b>`);
 
+    // Если раскрыт навык — вдруг именно его не хватало для закрытой комнаты
+    checkRoomEvents();
+
     $('revealPanel').style.display = 'none';
     currentIndex = (currentIndex + 1) % players.length;
     nextPlayerTurn();
 }
+
 function nextRound() {
     round++;
     phase = "reveal";
     players.forEach(p => p._acted = false);
     currentIndex = 0;
     log(`--- Раунд ${round}: каждый раскрывает ещё одну характеристику ---`);
+
+    triggerRoundConditions();
+    checkRoomEvents();
+    renderStoryPanel();
+
     nextPlayerTurn();
 }
-function startActionCard() {
-    const p = players[currentIndex];
-    if (!p.actionCard || p.actionCardUsed) return;
 
-    // Для простоты: если карта "Подглядывание" - просим выбрать игрока
-    if (p.actionCard.id === 'reveal') {
-        const targetName = prompt("Введите имя игрока, чью характеристику хотите подсмотреть:");
-        const target = players.find(t => t.name === targetName && t.alive);
-        if (target) {
-            // Находим скрытую характеристику
-            const hiddenFields = FIELDS.filter(f => !target.revealed[f.key] && f.key !== 'profession' && f.key !== 'sex');
-            if (hiddenFields.length > 0) {
-                const randomField = randomItem(hiddenFields);
-                target.revealed[randomField.key] = true; // Открываем её для всех
-                log(`<b>🃏 ${p.name}</b> использует карту "Подглядывание" и раскрывает <b>${randomField.label}: ${displayValue(randomField, target)}</b> у игрока ${target.name}!`);
-                p.actionCardUsed = true;
-                closeModal('modalOverlay'); // На всякий случай
-                $('revealPanel').style.display = 'none';
-                currentIndex = (currentIndex + 1) % players.length;
-                nextPlayerTurn();
-            } else {
-                alert("У этого игрока нет скрытых характеристик!");
-            }
-        }
-    } else {
-        alert("Эта карта пока в разработке или требует особых условий.");
+// ==================== КАРТЫ ДЕЙСТВИЙ ====================
+function openActionCardModal() {
+    const owner = players[currentIndex];
+    if (!owner || !owner.alive) return;
+
+    if (!owner.actionCard) {
+        alert('У вас нет карты действия.');
+        return;
     }
+    if (owner.actionCardUsed) {
+        alert('Эта карта уже использована.');
+        return;
+    }
+
+    const targets = players.filter(p => p.alive && p.name !== owner.name);
+    if (targets.length === 0) {
+        alert('Нет других живых игроков, на которых можно применить карту.');
+        return;
+    }
+
+    actionCardOwnerIndex = currentIndex;
+
+    $('actionModalTitle').textContent = `${owner.actionCard.icon || '🃏'} ${owner.actionCard.name}`;
+    $('actionModalDesc').textContent = owner.actionCard.desc;
+    $('actionModalBody').innerHTML = `
+        <label class="action-label">Выберите игрока:
+            <select id="actionTarget">
+                ${targets.map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('')}
+            </select>
+        </label>
+        <div id="actionOptions"></div>`;
+
+    $('actionTarget').addEventListener('change', updateActionOptions);
+    updateActionOptions();
+    $('actionModalOverlay').classList.add('open');
 }
 
-// === ГОЛОСОВАНИЕ ===
+function updateActionOptions() {
+    const owner = players[actionCardOwnerIndex];
+    const targetSelect = $('actionTarget');
+    const box = $('actionOptions');
+    const applyBtn = $('applyActionBtn');
+
+    if (!owner || !targetSelect) {
+        box.innerHTML = '<i>Нет доступной цели.</i>';
+        applyBtn.disabled = true;
+        return;
+    }
+
+    const target = players.find(p => p.alive && p.name === targetSelect.value);
+    if (!target) {
+        box.innerHTML = '<i>Выберите живого игрока.</i>';
+        applyBtn.disabled = true;
+        return;
+    }
+
+    const cardId = owner.actionCard ? owner.actionCard.id : '';
+    let options = [];
+
+    if (cardId === 'reveal') {
+        options = FIELDS.filter(f =>
+            f.key !== 'profession' && f.key !== 'sex' &&
+            !target.revealed[f.key] &&
+            target[f.key] !== CUSTOM_MARKER
+        ).map(f => ({ value: f.key, label: `${f.label} (скрыта)` }));
+    } else if (cardId === 'swap') {
+        options = FIELDS.filter(f =>
+            f.key !== 'sex' &&
+            owner.revealed[f.key] && target.revealed[f.key] &&
+            owner[f.key] !== CUSTOM_MARKER && target[f.key] !== CUSTOM_MARKER
+        ).map(f => ({
+            value: f.key,
+            label: `${f.label}: у вас «${displayValue(f, owner)}», у цели «${displayValue(f, target)}»`
+        }));
+    } else if (cardId === 'steal') {
+        options = ['luggage1', 'luggage2']
+            .filter(key => target[key] && target[key] !== CUSTOM_MARKER && target[key] !== '—')
+            .map(key => {
+                const field = FIELDS.find(f => f.key === key);
+                return { value: key, label: `${field.label}: ${target[key]}` };
+            });
+    }
+
+    if (options.length === 0) {
+        box.innerHTML = '<i>Для этой карты нет подходящей цели. Выберите другого игрока.</i>';
+        applyBtn.disabled = true;
+        return;
+    }
+
+    box.innerHTML = `
+        <label class="action-label">Что применить:
+            <select id="actionField">
+                ${options.map(o => `<option value="${o.value}">${escapeHtml(o.label)}</option>`).join('')}
+            </select>
+        </label>`;
+    applyBtn.disabled = false;
+}
+
+function applyActionCard() {
+    const owner = players[actionCardOwnerIndex];
+    if (!owner || owner.actionCardUsed || !owner.actionCard) return;
+
+    const targetSelect = $('actionTarget');
+    const fieldSelect = $('actionField');
+    if (!targetSelect || !fieldSelect) return;
+
+    const target = players.find(p => p.alive && p.name === targetSelect.value);
+    const fieldKey = fieldSelect.value;
+    const card = owner.actionCard;
+
+    if (!target) {
+        alert('Выберите живого игрока.');
+        return;
+    }
+
+    if (card.id === 'reveal') {
+        const field = FIELDS.find(f => f.key === fieldKey);
+        if (!field || target.revealed[fieldKey] || target[fieldKey] === CUSTOM_MARKER) {
+            alert('Эту характеристику нельзя раскрыть.');
+            return;
+        }
+        target.revealed[fieldKey] = true;
+        log(`🃏 <b>${owner.name}</b> использует «${card.name}» и раскрывает у <span class="player-tag">${target.name}</span> <b>${field.label}: ${displayValue(field, target)}</b>.`);
+    } else if (card.id === 'swap') {
+        const field = FIELDS.find(f => f.key === fieldKey);
+        if (!field || !owner.revealed[fieldKey] || !target.revealed[fieldKey]) {
+            alert('Обменять можно только уже открытую у обоих характеристику.');
+            return;
+        }
+        const ownerValue = owner[fieldKey];
+        const targetValue = target[fieldKey];
+        if (ownerValue === targetValue) {
+            alert('У вас одинаковые значения — обмен ничего не изменит.');
+            return;
+        }
+        owner[fieldKey] = targetValue;
+        target[fieldKey] = ownerValue;
+        log(`🃏 <b>${owner.name}</b> использует «${card.name}» и меняется с <span class="player-tag">${target.name}</span> характеристикой <b>${field.label}</b>. Теперь у ${owner.name}: <b>${displayValue(field, owner)}</b>, у ${target.name}: <b>${displayValue(field, target)}</b>.`);
+    } else if (card.id === 'steal') {
+        if (fieldKey !== 'luggage1' && fieldKey !== 'luggage2') {
+            alert('Выберите багаж.');
+            return;
+        }
+        const item = target[fieldKey];
+        if (!item || item === CUSTOM_MARKER || item === '—') {
+            alert('У этого игрока нет подходящего багажа.');
+            return;
+        }
+        owner.bonusLuggage = owner.bonusLuggage || [];
+        owner.bonusLuggage.push(item);
+        target[fieldKey] = '—';
+        target.revealed[fieldKey] = true;
+        log(`🃏 <b>${owner.name}</b> использует «${card.name}» и забирает у <span class="player-tag">${target.name}</span> багаж: <b>${item}</b>.`);
+    } else {
+        alert('Неизвестная карта действия.');
+        return;
+    }
+
+    owner.actionCardUsed = true;
+    closeActionCardModal();
+
+    if (card.id === 'reveal' || card.id === 'swap') {
+        checkRoomEvents();
+    }
+    renderStoryPanel();
+    showPlayerCard();
+}
+
+function closeActionCardModal() {
+    $('actionModalOverlay').classList.remove('open');
+    actionCardOwnerIndex = null;
+}
+
+// ==================== ГОЛОСОВАНИЕ ====================
 function startVoteRound() {
     const aliveCount = players.filter(p => p.alive).length;
     const planned = Math.max(1, parseInt(voteQuotas[round]) || 1);
@@ -350,17 +746,36 @@ function castDeciderVote(targetName) {
     showVoteResults();
 }
 
+function applyEliminationLosses(player) {
+    let hadRole = false;
+
+    ROLE_LOSS.forEach(rule => {
+        const match = (rule.professions || []).includes(player.profession) ||
+                      (rule.skills || []).includes(player.skill);
+        if (!match) return;
+
+        hadRole = true;
+        log(`⚠️ <b>Потеря специалиста:</b> ${rule.text}.`);
+        changeResource(rule.resource, -1);
+    });
+
+    if (!hadRole) {
+        log(`ℹ️ ${player.name} не был ключевым специалистом — бункер справится.`);
+    }
+}
+
 function markEliminated(name) {
     const player = players.find(p => p.name === name);
     if (!player || !player.alive) return;
+
     player.alive = false;
     log(`❌ <span class="player-tag">${player.name}</span> изгнан(а) из убежища.`);
 
-    // Условие: проверяем, был ли у него навык врача
-    if (player.skill === 'Первая помощь') {
-        log(`<b>⚠️ Условие:</b> Вы изгнали единственного медика. Здоровье выживших ухудшается. (Это повлияет на концовку)`);
-        // Здесь можно добавить глобальный флаг, например window.isMedicDead = true;
-    }
+    // Каждое изгнание бьёт по атмосфере в бункере
+    changeStability(-1, `изгнание ${player.name}`);
+    applyEliminationLosses(player);
+    triggerCondition(player, 'elimination');
+    renderStoryPanel();
 }
 
 function eliminate(name) {
@@ -396,43 +811,109 @@ function afterVoteStep() {
     nextRound();
 }
 
-// === МОДАЛКИ И ФИНАЛ ===
-function endGame() {
-    const survivors = players.filter(p => p.alive).map(p => p.name);
-    log(`=== Игра окончена. Выжили: ${survivors.join(', ')} ===`);
+// ==================== КОНЦОВКА ====================
+function countCoverage() {
+    const alive = players.filter(p => p.alive);
+    return {
+        medic: alive.some(p => p.skill === 'Первая помощь' || ['Хирург', 'Биолог'].includes(p.profession)),
+        engineer: alive.some(p => ['Инженер', 'Электрик', 'Механик'].includes(p.profession)),
+        food: alive.some(p => ['Фермер', 'Охотник', 'Повар'].includes(p.profession)),
+        guard: alive.some(p => ['Охранник', 'Спецназовец', 'Мент', 'Сапёр'].includes(p.profession))
+    };
+}
 
-    // 1. Логика определения концовки (из предыдущего сообщения)
-    let endingType = 'neutral';
-    const survivedSkill = players.filter(p => p.alive && p.skill === 'Первая помощь').length;
+function evaluateEnding() {
+    const survivors = players.filter(p => p.alive);
+    const coverage = countCoverage();
+    const coveredCount = Object.values(coverage).filter(Boolean).length;
+    const coverageNeeded = Math.min(3, Math.max(1, survivorsTarget));
+    const allResourcesOk = Object.keys(RESOURCE_META).every(key => (resources[key] || 0) > 0);
+    const criticalOk = (resources.food || 0) > 0 && (resources.water || 0) > 0;
+    const bonusRoomsOpened = SCENARIO.rooms.filter(room =>
+        (room.locked || room.broken || room.discoverRound) && openedRoomIds.includes(room.id)
+    ).length;
+    const roomsNeeded = Math.min(2, Math.max(1, survivors.length));
 
-    if (survivors.length === survivorsTarget && survivedSkill > 0) {
-        endingType = 'good';
-    } else if (survivors.length === 0) {
-        endingType = 'bad';
+    let type = 'neutral';
+    if (survivors.length === 0 ||
+        !criticalOk ||
+        stability <= -3 ||
+        ((resources.power || 0) <= 0 && (resources.medicine || 0) <= 0)) {
+        type = 'bad';
+    } else if (allResourcesOk &&
+        coveredCount >= coverageNeeded &&
+        bonusRoomsOpened >= roomsNeeded &&
+        stability >= -1) {
+        type = 'good';
     }
 
-    const endingText = SCENARIO.endings[endingType];
-    log(`<b>=== КОНЦОВКА: ${endingType.toUpperCase()} ===</b>`);
-    log(`<i>${endingText}</i>`);
+    const info = (SCENARIO.endings && SCENARIO.endings[type]) || { title: 'Финал', text: '' };
+    return {
+        type,
+        title: info.title,
+        text: info.text,
+        coverage,
+        coveredCount,
+        bonusRoomsOpened,
+        roomsNeeded
+    };
+}
 
-    // 2. Формируем HTML-блок для эпилога
-    const storyHtml = `
-        <div style="background: #2a1a3e; border: 1px solid #9b59b6; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-            <h3 style="color:#af7ac5; margin-top:0;">Эпилог: ${endingType === 'good' ? 'Надежда' : endingType === 'neutral' ? 'Суровое выживание' : 'Трагедия'}</h3>
-            <p>${endingText}</p>
-            <p><b>Открытые комнаты:</b> ${SCENARIO.rooms.filter(r => !r.locked || secretRoomsUnlocked.includes(r.name)).map(r => r.name).join(', ')}</p>
-        </div>
-    `;
+function endGame() {
+    const survivors = players.filter(p => p.alive);
+    const eliminated = players.filter(p => !p.alive);
+    const result = evaluateEnding();
+    endingType = result.type;
 
-    // 3. Находим контейнер на странице
-    const list = $('finalPlayersList');
+    log(`=== Игра окончена. Выжили: ${survivors.map(p => p.name).join(', ') || 'никто'} ===`);
+    log(`<b>=== КОНЦОВКА: ${result.title} ===</b>`);
+    log(`<i>${result.text}</i>`);
 
-    // ВСТАВЛЯЕМ ЭПИЛОГ ПЕРВЫМ (используем =)
-    list.innerHTML = storyHtml;
+    const coveredNames = [
+        result.coverage.medic ? 'медик' : '',
+        result.coverage.engineer ? 'техник' : '',
+        result.coverage.food ? 'добытчик еды' : '',
+        result.coverage.guard ? 'защитник' : ''
+    ].filter(Boolean).join(', ') || 'ключевых специалистов не осталось';
 
-    // 4. Проходимся по игрокам и ДОБАВЛЯЕМ их характеристики (используем +=)
+    const openedRoomNames = SCENARIO.rooms
+        .filter(room => openedRoomIds.includes(room.id))
+        .map(room => room.name)
+        .join(', ') || 'ничего не открыто';
+
+    const resourceLine = Object.keys(RESOURCE_META)
+        .map(key => `${RESOURCE_META[key].icon} ${RESOURCE_META[key].label}: ${resources[key] || 0}`)
+        .join(' · ');
+
+    const endingBlock = $('endingBlock');
+    if (endingBlock) {
+        endingBlock.innerHTML = `
+            <div class="ending-block ${result.type}">
+                <h3>${result.title}</h3>
+                <p>${result.text}</p>
+                <p><b>Сценарий:</b> ${SCENARIO.title}</p>
+                <p><b>Остались в бункере:</b> ${survivors.map(p => p.name).join(', ') || 'никто'}</p>
+                <p><b>Изгнаны:</b> ${eliminated.map(p => p.name).join(', ') || 'никого не изгнали'}</p>
+                <p><b>Специалисты:</b> ${coveredNames}</p>
+                <p><b>Открытые помещения:</b> ${openedRoomNames}</p>
+                <p><b>Ресурсы:</b> ${resourceLine}</p>
+                <p><b>Стабильность:</b> ${signed(stability)}</p>
+            </div>`;
+    }
+
+    let listHtml = '';
     players.forEach(p => {
         const isSurvivor = p.alive;
+        const actionText = p.actionCard
+            ? `${p.actionCard.name}${p.actionCardUsed ? ' (использована)' : ' (не использована)'}`
+            : 'нет';
+        const conditionText = p.conditionCard
+            ? `${p.conditionCard.name}${p.conditionCardTriggered ? ' (сработало)' : ' (не сработало)'}`
+            : 'нет';
+        const bonusText = p.bonusLuggage && p.bonusLuggage.length
+            ? p.bonusLuggage.join(', ')
+            : 'нет';
+
         let playerHtml = `<div class="final-player ${isSurvivor ? 'survivor' : 'eliminated'}">`;
         playerHtml += `<b class="player-tag">${p.name}</b>${isSurvivor ? ' 🟢 выжил' : ' 🔴 выбыл'}:<br>`;
 
@@ -443,20 +924,23 @@ function endGame() {
             return `<span class="hidden-trait">• ${f.label}: ${value}</span>`;
         });
         playerHtml += lines.join('<br>');
-        playerHtml += '</div>';
+        playerHtml += `<br><span class="final-extra">🃏 Карта: ${actionText} · 🎴 Условие: ${conditionText} · 🎒 Бонус: ${bonusText}</span>`;
+        playerHtml += `</div>`;
 
-        // ДОБАВЛЯЕМ КАЖДОГО ИГРОКА К ТОМУ, ЧТО УЖЕ НАПИСАНО (используем +=)
-        list.innerHTML += playerHtml;
+        listHtml += playerHtml;
     });
+    $('finalPlayersList').innerHTML = listHtml;
 
-    // 5. Скрываем игровые панели и показываем финальный экран
     $('voteCardPanel').style.display = 'none';
     $('revealPanel').style.display = 'none';
     $('passScreen').style.display = 'none';
     $('voteResultPanel').style.display = 'none';
     $('deciderPanel').style.display = 'none';
+    $('actionModalOverlay').classList.remove('open');
 
+    $('endGamePanel').className = `end-game-panel ${result.type}`;
     $('endGamePanel').style.display = 'block';
+    renderStoryPanel();
 }
 
 // ==================== МОДАЛКИ ====================
@@ -475,9 +959,12 @@ function openRevealedModal() {
         if (!isEliminated && lines.length === 0) return;
 
         const status = isEliminated ? ' <span style="color:#e94560;">[выбыл]</span>' : '';
+        const bonus = p.bonusLuggage && p.bonusLuggage.length
+            ? `<br>🎒 Бонусный багаж: <b>${p.bonusLuggage.join(', ')}</b>`
+            : '';
         html += `<div class="revealed-item">
                     <b class="player-tag">${p.name}</b>${status}:<br>
-                    ${lines.join('<br>')}
+                    ${lines.join('<br>')}${bonus}
                 </div>`;
     });
 
@@ -488,6 +975,7 @@ function openRevealedModal() {
 function openLogModal() {
     $('logModalOverlay').classList.add('open');
 }
+
 function restartGame() {
     $('restartModalOverlay').classList.add('open');
 }
@@ -496,16 +984,19 @@ function confirmRestart() {
     // принудительная перезагрузка без кеша
     location.reload();
 }
+
 function closeModal(id) {
     $(id).classList.remove('open');
 }
 
 // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 document.addEventListener('DOMContentLoaded', () => {
+    populateScenarioSelect();
     renderNameInputs();
     updateAutoVoteRounds(true);
     renderVoteQuotaRows(true);
 
+    $('scenarioSelect').addEventListener('change', updateScenarioHint);
     $('playerCount').addEventListener('change', () => {
         renderNameInputs();
         updateAutoVoteRounds();
@@ -530,13 +1021,21 @@ document.addEventListener('DOMContentLoaded', () => {
     $('closeRevealedBtn').addEventListener('click', () => closeModal('modalOverlay'));
     $('closeLogBtn').addEventListener('click', () => closeModal('logModalOverlay'));
 
-    $('fabRestart').addEventListener('click', restartGame);   // открывает модалку
+    $('fabRestart').addEventListener('click', restartGame);
 
     $('confirmRestartBtn').addEventListener('click', confirmRestart);
     $('cancelRestartBtn').addEventListener('click', () => closeModal('restartModalOverlay'));
     $('closeRestartBtn').addEventListener('click', () => closeModal('restartModalOverlay'));
     $('restartModalOverlay').addEventListener('click', e => {
         if (e.target === $('restartModalOverlay')) closeModal('restartModalOverlay');
+    });
+
+    // карты действий
+    $('applyActionBtn').addEventListener('click', applyActionCard);
+    $('cancelActionBtn').addEventListener('click', closeActionCardModal);
+    $('closeActionBtn').addEventListener('click', closeActionCardModal);
+    $('actionModalOverlay').addEventListener('click', e => {
+        if (e.target === $('actionModalOverlay')) closeActionCardModal();
     });
 
     // закрытие модалок по клику на фон

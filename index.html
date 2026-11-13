@@ -12,6 +12,13 @@
 <!-- ===== НАСТРОЙКА ===== -->
 <div class="card" id="setup">
   <h3>Настройка</h3>
+
+  <div style="margin-top: 8px;">
+    <h4 style="margin: 0 0 8px; color:#f0a500;">Сценарий</h4>
+    <select id="scenarioSelect"></select>
+    <p class="hint" id="scenarioHint"></p>
+  </div>
+
   <label>Количество игроков (4–15):
     <input type="number" id="playerCount" value="4" min="4" max="15">
   </label>
@@ -47,7 +54,7 @@
   <div class="card" id="storyPanel" style="display:none; border-color: #f0a500;">
     <h3 id="storyTitle" style="margin-top:0; color:#f0a500;"></h3>
     <p id="storyDesc" style="font-style:italic; color:#ccc;"></p>
-    <p id="storyRooms"></p>
+    <div id="storyRooms" class="story-rooms"></div>
   </div>
 
   <div class="card pass-screen" id="passScreen" style="display:none;">
@@ -59,7 +66,7 @@
 
   <div class="card" id="revealPanel" style="display:none;">
     <h3>Ход игрока: <span id="currentPlayerName" class="player-tag"></span></h3>
-    <p class="hint">Профессия уже раскрыта всем. Нажмите на одну из оставшихся характеристик, чтобы раскрыть её.</p>
+    <p class="hint">Профессия уже раскрыта всем. Нажмите на одну из оставшихся характеристик, чтобы раскрыть её. Секретные карты видны только вам.</p>
     <div id="currentTraits"></div>
     <p id="revealStatus"></p>
   </div>
@@ -95,7 +102,7 @@
 
   <div class="end-game-panel" id="endGamePanel" style="display:none;">
     <h2>🏆 Игра окончена</h2>
-    <p style="text-align:center; color:#4caf50; font-size:18px; font-weight:bold;">Выжили в убежище!</p>
+    <div id="endingBlock"></div>
     <div id="finalPlayersList"></div>
     <div style="text-align:center; margin-top:20px;">
       <button id="restartBtn">Сыграть снова</button>
@@ -128,18 +135,19 @@
   </div>
 </div>
 
-<!-- 1. Данные и конфигурация -->
-<script src="config.js"></script>
-<!-- 2. Глобальные переменные (состояние) -->
-<script src="state.js"></script>
-<!-- 3. Вспомогательные функции -->
-<script src="utils.js"></script>
-<!-- 4. Логика настройки и старта -->
-<script src="setup.js"></script>
-<!-- 5. Игровой процесс и инициализация -->
-<script src="gameplay.js"></script>
-</body>
-</html>
+<!-- ===== МОДАЛКА: КАРТА ДЕЙСТВИЯ ===== -->
+<div class="modal-overlay" id="actionModalOverlay">
+  <div class="modal action-modal">
+    <button class="close-btn" id="closeActionBtn">Отмена ✕</button>
+    <h2 id="actionModalTitle">Карта действия</h2>
+    <p class="hint" id="actionModalDesc"></p>
+    <div id="actionModalBody"></div>
+    <div class="action-modal-footer">
+      <button id="applyActionBtn">Применить</button>
+      <button id="cancelActionBtn">Отмена</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===== МОДАЛКА: ПОДТВЕРЖДЕНИЕ ПЕРЕЗАПУСКА ===== -->
 <div class="modal-overlay" id="restartModalOverlay">
@@ -153,3 +161,16 @@
     </div>
   </div>
 </div>
+
+<!-- 1. Данные и конфигурация -->
+<script src="config.js"></script>
+<!-- 2. Глобальные переменные (состояние) -->
+<script src="state.js"></script>
+<!-- 3. Вспомогательные функции -->
+<script src="utils.js"></script>
+<!-- 4. Логика настройки и старта -->
+<script src="setup.js"></script>
+<!-- 5. Игровой процесс и инициализация -->
+<script src="gameplay.js"></script>
+</body>
+</html>

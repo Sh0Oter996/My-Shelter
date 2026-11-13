@@ -29,3 +29,14 @@ function displayValue(field, player) {
     if (field.key === 'age') return player.age + ' лет';
     return raw;
 }
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+function signed(value) {
+    return value > 0 ? `+${value}` : String(value);
+}
